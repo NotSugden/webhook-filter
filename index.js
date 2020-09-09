@@ -2,10 +2,15 @@ const fs = require('fs');
 const crypto = require('crypto');
 const http = require('http');
 const bl = require('bl');
-const snekfetch = require('snekfetch');
+const { WebhookClient } = require('discord.js');
 
 // Load config and build list of refs to block
 const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+
+// https://discordapp.com/api/webhooks/id/token/github
+if(config.webhook.endsWith('/')) config.webhook = config.webhook.slice(-1);
+const [webhookID, webhookToken] = config.webhook.split('/').slice(-3);
+const webhook = new WebhookClient(webhookID, webhookToken);
 const refs = {};
 for(const [repo, branches] of Object.entries(config.blacklist)) refs[repo] = branches.map(b => `refs/heads/${b}`);
 
@@ -66,10 +71,11 @@ http.createServer((req, res) => {
 
 		// Forward event to Discord's webhook
 		try {
-			await snekfetch.post(config.webhook, {
+			await webhook.api.webhooks(webhook.id, webhook.token).github.post({
 				data: payload,
+				query: { wait: true },
+				auth: false,
 				headers: {
-					'content-type': 'application/json',
 					'x-github-event': event,
 					'x-github-delivery': id
 				}
